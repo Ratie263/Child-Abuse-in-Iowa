@@ -17,9 +17,7 @@ navbar:
   title: "Final Project Title"
   left:
     - text: "Blogpost"
-      href: index.html
-    - text: "More info"
-      href: more_info.html
+      href: Group_4.html
 #  right:
 #    - icon: fa-slack fa-lg
 #      href: https://2018-fall-sds-albert.slack.com/
