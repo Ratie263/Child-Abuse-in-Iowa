@@ -1,0 +1,260 @@
+---
+title: "Child Abuse in Iowa: Stopping Tomorrow's Abuser by Protecing Today's Abusee"
+author: "Group 4: Ratie Vushe and Jinghan Gao"
+date: "November 30th, 2018"
+output: 
+  html_document:
+    highlight: tango
+    theme: cerulean
+    toc: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: false
+    df_print: kable
+---   
+<style>
+body {
+text-align: justify}
+</style>
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Set R Markdown chunk defaults:
+knitr::opts_chunk$set(
+  echo = FALSE, message = FALSE, warning = FALSE, 
+  fig.width = 16/2, fig.height = 9/2
+)
+```
+
+
+```{r}
+# Load all necessary packages here. It's a good idea to load all packages at 
+# the beginning of a Rmd file so that collaborators can see in one shot all
+# packages they'll need to ensure are installed beforehand:
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(USAboundaries)
+library(leaflet)
+library(maps)
+library(sf)
+
+
+
+# Do your data loading and wrangling (if any) here:
+
+```
+
+
+# A Worldwide Problem 
+
+![Religious News Service](https://religionnews.com/wp-content/uploads/2016/02/child-abuse.jpg)
+
+
+Crime is constantly increasing and while child abuse might have drowned amongst other forms of crime, more than 3 million reports of child abuse are made in the United States per year. Most people believe that child abuse is as a result of action, such as physical, sexual abuse or exposure to dangerous substances; but inaction in the form of denial of critical care or negligence can also cause immense harm to children people often overlook this. Without paying enough attention and consideration to our future generation, the consequence could be drastically adverse, varying from Intergenerational transmission of abuse to suicidal behavior. The most effective way to curb future child abuse is to protect today’s children because a third of victims of child abuse become abusers themselves afterwards. Using population and child abuse data we perform analysis into child abuse in Iowa and recommend policy changes to improve the situation.
+
+## Background information
+The dataset, from Waggle, summarizes the occurrences of different types of child abuse in the counties of Iowa from 2004 to 2017. Data is grouped by calendar year, county and type of abuse. Iowa is divided into several DHS Service areas(federal agencies designed to protect the respective counties against threats).
+
+```{r}
+#Read in All necessary csv files
+child_abuse <- read.csv("child_abuse.csv")
+population<-read.csv("population.csv")
+
+```
+
+
+
+
+```{r}
+#Only for 2017
+child_abuse0 <- na.omit(child_abuse) %>%
+  
+  #seperate the colum into latitude and longitude
+
+  separate(col = County.Primary.Point, into = c("latitude", "longitude"), 
+           sep = ",")%>%
+  #remove parentheses
+  separate(col = (latitude), into = c("delete", "latitude"), sep = "\\(")%>%
+  separate(col = (longitude), into = c("longitude", "delete2"), sep = "\\)") %>% 
+  # convert both column contents into numeric variables.
+  mutate(
+    latitude = as.numeric(latitude),
+    longitude = as.numeric(longitude))%>%
+  # identify Service Areas according to number
+  mutate(Service.Area= ifelse(grepl("1", DHS.Service.Area), 1,
+         ifelse(grepl("2", DHS.Service.Area), 2,
+         ifelse(grepl("3", DHS.Service.Area), 3,
+         ifelse(grepl("4", DHS.Service.Area), 4,
+         5
+         ))))
+  )
+```
+```{r}
+child_abuse1<- child_abuse0%>%
+filter(Year==2017)
+```
+
+```{r}
+#To see how total abuse varies by area
+
+child_abuse2<-child_abuse1 %>%
+  
+  group_by(County.Name)%>%
+  summarise(total_abuse= sum(Occurences) )
+
+```
+## Most Common Abuse Type
+
+We did some data wrangling to find the most occurring type of abuse in each county and to our surprise Denial of Critical Care was the most popular across all counties, having significant intensity in each service area.
+```{r}
+# so that we can have unique counties
+child_abuse_most <-
+ child_abuse1 %>%
+ group_by(County.Name)%>%
+ filter(Occurences == max(Occurences))
+head(child_abuse_most, n=10)
+```
+
+```{r}
+#To get unique counties
+child_abuse3<-child_abuse_most%>%
+
+inner_join(child_abuse2, by ="County.Name")
+
+```
+
+```{r}
+#Now that we have unique counties
+#we can match each county back to its rightful coordinates
+
+child_abuse4<-child_abuse3%>%
+  select(longitude, latitude, County.Name, total_abuse)
+```
+
+# Intensity of Child abuse in Iowa
+
+We first looked at the total number of child abuse that occurred in each county in 2017. By using a static map we created a display of the degree of child abuse; with the darkest shades representing by the most reports of child abuse and the light areas representing otherwise. We further divided up the counties into service areas denoted by numbers 1, 2, 3, 4, 5 on map. There are ninety nine counties in Iowa, meaning that in average, 19.8 counties share the same service area. On the map, many of the darker counties are under Service Area 2, which indicates there are high rates of abuse in the Northern County. This may be a result of poor service quality in this region of Iowa. Generally speaking, we can arrange the service areas by quality to obtain: 2 < 1 < 4 < 5 < 3 (with 2 providing the least quality and 3 having the highest quality)
+  
+```{r}
+#Plot a static map of how abuse varies across the counties
+Iowa_counties <-
+ USAboundaries::us_counties(resolution = "high", states = c("Iowa"))
+ 
+ggplot() + 
+geom_sf(aes(fill= child_abuse4$total_abuse), data = Iowa_counties)+ 
+scale_fill_gradient(low = "pink", high = "darkblue")+   
+geom_text(data= child_abuse1, aes( label=Service.Area, x=longitude, y= latitude), size=5) +
+  labs(title="Total Occurence of Child Abuse in each county", fill="Total Abuse")
+```
+
+```{r}
+#Gives us total population by county
+population1<- population%>%
+  mutate(FIPS.County.Code=Fips)%>%
+  mutate(population17=X2017)%>%
+  select(FIPS.County.Code, Area, population17)
+```
+
+```{r}
+#gives us the most popular types of Abuse in each county,
+#apart from Denial of Critical Care (Neglect) which is the most popular in all the states.
+
+child_abuse5 <-
+ child_abuse1 %>%
+ filter(Abuse.Type!= "Denial of Critical Care (Neglect)")%>%
+ group_by(County.Name)%>%
+ filter(Occurences == max(Occurences))
+
+```
+
+```{r}
+#Now gives us the most popular types of abuse happening in each county including Denial of Critical Care (Neglect).
+child_abuse7<- child_abuse5%>%
+full_join(child_abuse_most, by=NULL)
+
+
+```
+```{r}
+#combine population data and abuse data and calculate ratio of abuse per person in each county
+population2<- population1%>%
+full_join(child_abuse7, by="FIPS.County.Code")%>%
+#remove Allows Access by Registered Sex Offender because it has the least count so that we only plot five tyoes of abuse, and it is pretty similar to sexual abuse
+filter(Abuse.Type!="Denial of Critical Care (Neglect)")%>%
+mutate(ratio=(Occurences/population17))%>%
+# multiply by 5000 to make it large enough to be visible
+mutate(ratio=ratio*8000)
+```
+
+
+```{r}
+# to see how many colors we will need to use
+
+population3<-population2%>%
+group_by(Abuse.Type)%>%
+summarise(total_abuse=sum(Occurences))
+```
+
+# Types of Abuse Across States
+We eliminated Denial of Critical care from our observations and created an interactive map to show the second most prevalent types of abuse in each county. We also used a dataset with Iowa county population and joined it together with the Abuse dataset. The representation above shows the results with color of each circle showing the types of abuse and the radius showing average occurrence according to population. Hovering over each point shows us what county each type of abuse occurs in with the pop up being the county name.
+```{r}
+#Plot interactive map of the two most popular abusee types per county with size representing ratio
+#Hovering over the plot allows you to see the service areas in which these types of abuse are happening
+
+pal <- colorFactor(c("blue", "red", "green","yellow", "black"), population2$Abuse.Type )
+
+lopt = labelOptions(noHide = TRUE,
+                    direction = 'top',
+                    textOnly = TRUE)
+                    
+leaflet(data = population2) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    ~longitude, ~latitude, radius=population2$ratio,clusterOptions = NULL,popup = ~County.Name, label = ~DHS.Service.Area, color= ~pal(Abuse.Type), stroke = FALSE, fillOpacity = 0.8
+   
+  )%>%
+   addLegend(pal= pal, values=~population2$Abuse.Type, opacity=8, title="Type of Abuse")
+
+
+```
+
+
+# Abuse Across the Years
+
+
+Below is a representation of how total abuse has varied from 2004-2017. It has peaked in 2017 because Dangerous Substance abuse only started being recorded in 2017. Iowa passed a law in 2017 that legalised medical marijuana use and while it is only offered to registered patients, this could be a cause of the increase in Dangerous Substance abuse and Presence of Illegal Drugs in child’s system might.
+
+```{r}
+child_abuse_hist<-child_abuse0%>%
+  group_by(Year)%>%
+  summarize(total_abuse=sum(Occurences))
+  ggplot(child_abuse_hist, aes(x = Year , y=total_abuse)) +
+  geom_col()+
+  labs(x = "Year", y="Total Abuse per Year", 
+       title = "Total Abuse in Iowa from 2004-2017")
+
+```
+
+
+
+# Policy Changes
+ Given the above information, we recommended the following policy changes for the State of Iowa:
+Increase education on child abuse; Increase the quality of service area 2. Increase the number of service areas as some of them encompass too many counties. Issue new laws that prevents underage children from obtaining dangerous substances. (This could mean raising legal drinking age) *
+## Conclusion
+ To date the financial cost of child abuse in the United States is a approximately $585 billion and we believe that millions could be saved afterwards by implementing the above policy changes today that would not cost this much.
+
+
+# References and Citations
+* [The Issue of Child Abuse](https://www.childhelp.org/child-abuse/), n.d.
+*[Effects of child abuse and neglect for adult survivors](https://aifs.gov.au/cfca/publications/effects-child-abuse-and-neglect-adult-survivor) , 2014, January. 
+*[Sad Legacy Of Abuse: The Search For Remedies]  (https://www.nytimes.com/1989/01/24/science/sad-legacy-of-abuse-the-search-for-remedies.html) , JAN. 24, 1989
+* [Medical Marijuana use in Iowa] (https://420intel.com/regional/iowa), Oct.01.2018
+* [United States Cencus Bureau(https://www.census.gov/quickfacts/iowacountyiowa) 
+
+
+
+
+
+
+
